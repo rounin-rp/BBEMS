@@ -43,8 +43,8 @@ def generateTransactionID(isAuth=False):
         TID = starttxt+midtxt+numtxt+endtxt
     return TID
 
-#This function is used to recieve messages from client
-def recieveMessages(client_socket):
+#This function is used to receive messages from client
+def receiveMessages(client_socket):
     try:
         message = pickle.loads(client_socket.recv(1024))
         if not len(message):
@@ -111,23 +111,50 @@ if __name__ == '__main__':
     socket_list = [server_socket,]
     clients = {}
 
+    #Running the server live
     while True:
         readers,_,errors = select.select(socket_list,[],socket_list)
         for notified_socket in readers:
             if notified_socket == server_socket:
                 client_socket,client_addr = server_socket.accept()
-                clientinfo = recieveMessages(client_socket)
+                clientinfo = receiveMessages(client_socket)
                 if clientinfo is False:
                     continue
                 print(f"connection established with {client_socket}")
                 socket_list.append(client_socket)
             else:
-                message = recieveMessages(notified_socket)
-                if message is False:
+                message_received = receiveMessages(notified_socket)
+                if message_received is False:
                     print(f"disconnected from {notified_socket}")
                     socket_list.remove(notified_socket)
                 else:
-                    pass 
+                    if message_received[0] == '1001':
+                        authUser = message_received[1]
+                        generatedKey = generateKey()
+                        generatedTID = generatedTID(authUser)
+                        message_to_send = ''
+                        if(storeKeyToDatabase(generatedTID,generatedKey)):
+                            message_to_send = ['2001',generatedTID,generatedKey]
+                        else:
+                            message_to_send = False
+                        notified_socket.send(pickle.dumps(message_to_send))
+                    elif message_received[0] == '1002':
+                        receivedTID = message_received[1]
+                        data_received = getKeyFromDatabase(receivedTID)
+                        value,data = data_received[0],data_received[1]
+                        message_to_send = ''
+                        if(value):
+                            message_to_send = ['2002',data]
+                        else:
+                            message_to_send = False
+                        notified_socket.send(pickle.dumps(message_to_send))
+
+        for notified_socket in errors:
+            print(f"something is wrong with {notified_socket}")
+            socket_list.remove(notified_socket)
+            del clients[notified_socket]
+                        
+
 
 
 
