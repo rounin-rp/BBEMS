@@ -1,11 +1,23 @@
 from ecdsa import SigningKey,VerifyingKey,NIST521p
 import socket
-import pickle
+from message import sendMessage,receiveMessages
 import sys
 from random import randint
 from os import system
 
 
+def sendDataToServer(message_to_send):
+    server = socket.socket()
+    server.connect(('127.0.0.1',9098))
+    sendMessage(server,message_to_send)
+    message_received = receiveMessages(server)
+    server.close()
+    if(message_received[0] == '2222'):
+        return message_received
+    else:
+        return False
+
+#Function for new registration
 def newRegistration():
     gradeset = set(['X','Y','Z'])
     system('cls')
@@ -30,18 +42,23 @@ def newRegistration():
     vk = sk.verifying_key
     privateKey = sk.to_pem().decode()
     publicKey = vk.to_pem().decode()
-    print("your registration has been completed successfully!\nMake sure you save the keys below to a safe environment")
-    print('-*-'*100)
-    print(f"your secret number(important) = {secret_number}")
-    print('-*-'*100)
-    print("your public key : ")
-    print(publicKey)
-    print('-*-'*100)
-    print("your private key(important) : ")
-    print(privateKey)
-    print('-*-'*100)
-    return (publicKey,privateKey)
-
+    message_to_send = ['1111',(secret_number,grade,publicKey)]
+    message_received = sendDataToServer(message_to_send)
+    if message_received:
+        print("your registration has been completed successfully!\nMake sure you save the keys below to a safe environment")
+        print('-*-'*100)
+        print(f"your secret number(important) = {secret_number}")
+        print('-*-'*100)
+        print("your public key : ")
+        print(publicKey)
+        print('-*-'*100)
+        print("your private key(important) : ")
+        print(privateKey)
+        print('-*-'*100)
+        return (publicKey,privateKey)
+    else:
+        print("(BBEMS error:) Registration falied")
+        return False
 if __name__ == '__main__':
     message_to_print = ''
     arg_num = len(sys.argv)

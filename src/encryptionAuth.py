@@ -1,3 +1,4 @@
+from re import M
 from encryption import AES
 from random import randint
 import socket 
@@ -5,7 +6,8 @@ import select
 import pickle 
 import json
 import hashlib
-import mysql.connector
+from database import connectDatabase,executeSelectQuery,executeInsertQuery
+from message import receiveMessages,sendMessage
 
 #Method to generate seed for AES KEY
 def generateKey():
@@ -43,30 +45,15 @@ def generateTransactionID(isAuth=False):
         TID = starttxt+midtxt+numtxt+endtxt
     return TID
 
-#This function is used to receive messages from client
-def receiveMessages(client_socket):
-    try:
-        message = pickle.loads(client_socket.recv(1024))
-        if not len(message):
-            return False
-        return message
-    except:
-        return False
 
 #This function will save the AES Key seed Corresponding to the transaction ID TID into the database
 def storeKeyToDatabase(TID,Key):
     value = True
     try:
-        mydb = mysql.connector.connect(
-            host="localhost",
-            user="encauth",
-            password="1234",
-            database="development"
-        )
+        mydb = connectDatabase("localhost","encauth","1234","development")
         mycursor = mydb.cursor()
         query = f"INSERT INTO keyman (TID,AESkey) VALUES('{TID}',{Key})"
-        mycursor.execute(query)
-        mydb.commit()
+        executeInsertQuery(mydb,mycursor,query)
     except:
         value = False
     return value 
@@ -76,16 +63,10 @@ def getKeyFromDatabase(TID):
     value = True
     data = {}
     try:
-        mydb = mysql.connector.connect(
-            host="localhost",
-            user="encauth",
-            password="1234",
-            database="development"
-        )
+        mydb = connectDatabase("localhost","encauth","1234","development")
         mycursor = mydb.cursor()
-        query = f"SELECT * FROM keyman WHERE TID = {TID}"
-        mycursor.execute(query)
-        myresult = mycursor.fetchall()
+        query = f"SELECT * FROM keyman WHERE TID = '{TID}'"
+        myresult = executeSelectQuery(mycursor,query)
         if(len(myresult) == 1):
             data['TID'] = myresult[0][0]
             data['Key'] = myresult[0][1]
@@ -117,9 +98,9 @@ if __name__ == '__main__':
         for notified_socket in readers:
             if notified_socket == server_socket:
                 client_socket,client_addr = server_socket.accept()
-                clientinfo = receiveMessages(client_socket)
-                if clientinfo is False:
-                    continue
+                # clientinfo = receiveMessages(client_socket)
+                # if clientinfo is False:
+                #     continue
                 print(f"connection established with {client_socket}")
                 socket_list.append(client_socket)
             else:
@@ -131,15 +112,18 @@ if __name__ == '__main__':
                     if message_received[0] == '1001':
                         authUser = message_received[1]
                         generatedKey = generateKey()
-                        generatedTID = generatedTID(authUser)
+                        generatedTID = generateTransactionID(authUser)
                         message_to_send = ''
                         if(storeKeyToDatabase(generatedTID,generatedKey)):
                             message_to_send = ['2001',generatedTID,generatedKey]
                         else:
                             message_to_send = False
-                        notified_socket.send(pickle.dumps(message_to_send))
+                        # notified_socket.send(pickle.dumps(message_to_send))
+                        sendMessage(notified_socket,message_to_send)
                     elif message_received[0] == '1002':
+                        print("message id 1002 received")
                         receivedTID = message_received[1]
+                        print(f"received TID = {receivedTID}")
                         data_received = getKeyFromDatabase(receivedTID)
                         value,data = data_received[0],data_received[1]
                         message_to_send = ''
@@ -147,7 +131,8 @@ if __name__ == '__main__':
                             message_to_send = ['2002',data]
                         else:
                             message_to_send = False
-                        notified_socket.send(pickle.dumps(message_to_send))
+                        # notified_socket.send(pickle.dumps(message_to_send))
+                        sendMessage(notified_socket,message_to_send)
 
         for notified_socket in errors:
             print(f"something is wrong with {notified_socket}")
