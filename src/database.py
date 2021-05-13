@@ -15,7 +15,10 @@ def connectDatabase(hostname,username,psswd,databasename):
 def executeSelectQuery(myCursor,query):
     myCursor.execute(query)
     myResult = myCursor.fetchall()
-    return myResult
+    if len(myResult):
+        return myResult
+    else:
+        return False
 
 #this function will execute insert query
 def executeInsertQuery(mydb,myCursor,query):

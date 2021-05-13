@@ -12,10 +12,56 @@ def sendDataToServer(message_to_send):
     sendMessage(server,message_to_send)
     message_received = receiveMessages(server)
     server.close()
-    if(message_received[0] == '2222'):
+    if(message_received):
         return message_received
     else:
         return False
+
+def checkStatus(secret_number):
+    system('cls')
+    print("checking your status.....")
+    message_to_send = ['1112',secret_number]
+    message_received = sendDataToServer(message_to_send)
+    return message_received
+
+def authenticateUser(secret_number):
+    system('cls')
+    returnValue = True
+    print("you are required to enter the filename or full path of the filename which contains your private key")
+    message_to_send = ['0001',secret_number]
+    server = socket.socket()
+    server.connect(('127.0.0.1',9098))
+    sendMessage(server,message_to_send)
+    message_received = receiveMessages(server)
+    if(message_received[0] == '0002'):
+        if(message_received[1] is False):
+            print('no data found in corresponding to the given secret number')
+            exit()
+        puzzle_number = message_received[1]
+        print(puzzle_number)
+        privateKey = None
+        filename = input('enter the filename or full path : ')
+        try:
+            privateKey = SigningKey.from_pem(open(filename).read())
+        except:
+            print('(BBEMS error: 401) File does not contain any private key information')
+            sendMessage(server,['0010',False])
+            server.close()
+            exit()
+        signature = privateKey.sign(str(puzzle_number).encode())
+        message_to_send = ['0010',signature]
+        sendMessage(server,message_to_send)
+        message_received = receiveMessages(server)
+        server.close()
+        if message_received[0] == '0020' and message_received[1]:
+            print('Authentication successful')
+        else:
+            print('authentication failed !')
+            returnValue = False
+    else:
+        print('(BBEMS error: 0001) Failed to autenticate user')
+        returnValue = False
+    return returnValue
 
 #Function for new registration
 def newRegistration():
@@ -44,7 +90,7 @@ def newRegistration():
     publicKey = vk.to_pem().decode()
     message_to_send = ['1111',(secret_number,grade,publicKey)]
     message_received = sendDataToServer(message_to_send)
-    if message_received:
+    if message_received[0] == '2111':
         print("your registration has been completed successfully!\nMake sure you save the keys below to a safe environment")
         print('-*-'*100)
         print(f"your secret number(important) = {secret_number}")
@@ -55,7 +101,7 @@ def newRegistration():
         print("your private key(important) : ")
         print(privateKey)
         print('-*-'*100)
-        return (publicKey,privateKey)
+        return (secret_number,publicKey,privateKey)
     else:
         print("(BBEMS error:) Registration falied")
         return False
@@ -73,12 +119,31 @@ if __name__ == '__main__':
         arg2 = sys.argv[2]
         if(arg1 == '-n' and arg2 == '-r'):
             keys = newRegistration()
+            secret_number = keys[0]
+            privateKey = keys[2]
+            filename = str(secret_number)+'_PRIVATEKEY.pem'
+            file = open(filename,'w')
+            file.write(privateKey)
+            file.close()
+            print(f"your private key has been saved in {filename}")
         
         elif(arg1 == '-s' and arg2):
             print("this will show your status and details ")
-        
+            secret_number = arg2
+            message_received = checkStatus(secret_number)
+            if(message_received):
+                print(message_received[1])
+            else:
+                print(f"(BBEMS error code: 404) {secret_number} not registered") 
         elif(arg1 == '-U' and arg2):
-            print('upload evidence files here')
+            secret_number = arg2
+            success = authenticateUser(secret_number)
+            if success:
+                pass
+            else:
+                print("Authentication Failed exiting....")
+                exit()
+
         
         elif(arg1 == '-D' and arg2):
             print('download files here')
