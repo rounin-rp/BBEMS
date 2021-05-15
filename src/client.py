@@ -1,11 +1,13 @@
-from ecdsa import SigningKey,VerifyingKey,NIST521p
+from ecdsa import SigningKey,NIST521p
 import socket
 from message import sendMessage,receiveMessages
 import sys
 from random import randint
 from os import system
+from encryption.AES import AESCipher
+from ipfs import downloadFileFromIPFS, uploadFileToIPFS
 
-
+#Function to send data to the server 
 def sendDataToServer(message_to_send):
     server = socket.socket()
     server.connect(('127.0.0.1',9098))
@@ -17,6 +19,7 @@ def sendDataToServer(message_to_send):
     else:
         return False
 
+#Status if user exist or not (not important )
 def checkStatus(secret_number):
     system('cls')
     print("checking your status.....")
@@ -24,6 +27,7 @@ def checkStatus(secret_number):
     message_received = sendDataToServer(message_to_send)
     return message_received
 
+#User authentication with main server
 def authenticateUser(secret_number):
     system('cls')
     returnValue = True
@@ -38,9 +42,8 @@ def authenticateUser(secret_number):
             print('no data found in corresponding to the given secret number')
             exit()
         puzzle_number = message_received[1]
-        print(puzzle_number)
         privateKey = None
-        filename = input('enter the filename or full path : ')
+        filename = input('your private key filename(full path of file with extension) : ')
         try:
             privateKey = SigningKey.from_pem(open(filename).read())
         except:
@@ -54,7 +57,7 @@ def authenticateUser(secret_number):
         message_received = receiveMessages(server)
         server.close()
         if message_received[0] == '0020' and message_received[1]:
-            print('Authentication successful')
+            print('Authentication successful!!!\n')
         else:
             print('authentication failed !')
             returnValue = False
@@ -105,6 +108,45 @@ def newRegistration():
     else:
         print("(BBEMS error:) Registration falied")
         return False
+
+
+#Function to generate new TID and new AES encryption key
+def getTransactionIDandKey(secret_number):
+    message_to_send = ['T1001',secret_number]
+    message_received = sendDataToServer(message_to_send)
+    keys = False
+    print(f"messaged received = {message_received}")
+    if message_received[0] == '2001' and message_received[1]:
+        keys = message_received[2]
+    else:
+        print('The process failed exiting.....')
+        exit()
+    return keys
+
+#Uploading the file in IPFS
+def uploadFile(encryption_object):
+    file_path = input('enter the file name that you want to upload(full path of file with extension) : ')
+    data = uploadFileToIPFS(file_path)
+    metadata = False
+    if(data[0] == False):
+        metadata = False
+    else:
+        metadata = data[1]
+        metadata['Hash'] = encryption_object.encrypt(metadata['Hash'])
+    return metadata
+
+
+def mineTheDataToBlockchain(metadata):
+    message_to_send = ['M1N3',metadata]
+    message_received = sendDataToServer(message_to_send)
+    if message_received[0] == 'M1N3' and message_received[1]:
+        print("Data has been mined to blockchain successfully!!!")
+        print(f"please make a note of TID as it will be reqiured to further acess the file TID = {metadata['TID']}")
+    else:
+        print("Mining failed")
+        exit()
+
+#main flow of code
 if __name__ == '__main__':
     message_to_print = ''
     arg_num = len(sys.argv)
@@ -128,22 +170,59 @@ if __name__ == '__main__':
             print(f"your private key has been saved in {filename}")
         
         elif(arg1 == '-s' and arg2):
-            print("this will show your status and details ")
-            secret_number = arg2
+            secret_number = int(arg2)
             message_received = checkStatus(secret_number)
             if(message_received):
                 print(message_received[1])
             else:
                 print(f"(BBEMS error code: 404) {secret_number} not registered") 
         elif(arg1 == '-U' and arg2):
-            secret_number = arg2
-            success = authenticateUser(secret_number)
+            secret_number = int(arg2)
+            success = False
+            if not secret_number:
+                success = True
+            else:
+                success = authenticateUser(secret_number)
             if success:
-                pass
+                keys = getTransactionIDandKey(secret_number)
+                print(keys)
+                TID = keys[0]
+                seed = keys[1]
+                encryption_object = AESCipher(seed)
+                metadata = uploadFile(encryption_object)
+                if metadata is False:
+                    print("File upload encountered an error exiting....")
+                    exit()
+                metadata['TID'] = TID 
+                TID = None
+                seed = None
+                keys = None 
+                mineTheDataToBlockchain(metadata)
+
             else:
                 print("Authentication Failed exiting....")
                 exit()
 
         
         elif(arg1 == '-D' and arg2):
-            print('download files here')
+            secret_number = int(arg2)
+            if not secret_number:
+                print("anonymous users cannot download evidence files")
+                exit()
+            success = authenticateUser(secret_number)
+            if success:
+                TID = input("enter the TID of the file you want to download : ")
+                message_to_send = ['D1D0',TID]
+                message_received = sendDataToServer(message_to_send)
+                if message_received[0] == 'D1D0' and message_received[1] and message_received[2][0]:
+                    seed = message_received[1]
+                    aes_object = AESCipher(seed)
+                    address = aes_object.decrypt(message_received[2][0])
+                    filename = message_received[2][1]
+                    downloadFileFromIPFS(filename,address)
+
+
+                else:
+                    print("failed to get key from encryption authority ")
+                    exit()
+

@@ -8,9 +8,9 @@ class AESCipher(object):
     def __init__(self,key) -> None:
         super().__init__()
         self.blockSize = AES.block_size
-        self.key = hashlib.sha256(key.encode()).hexdigest()
+        self.key = hashlib.sha256(str(key).encode()).digest()
 
-    @staticmethod
+
     def _pad(self,plainText):
         number_of_bytes_to_pad = self.blockSize - len(plainText) % self.blockSize
         ascii_string = chr(number_of_bytes_to_pad)
@@ -19,13 +19,13 @@ class AESCipher(object):
         return padded_plainText
     
     @staticmethod
-    def _unpad(self,plainText):
+    def _unpad(plainText):
         lastChar = plainText[-1]
         bytes_to_remove = ord(lastChar)
         return plainText[:-bytes_to_remove]
     
-    def encrypt(self,plainText):
-        plainText = self._pad(plainText)
+    def encrypt(self,plaintext):
+        plainText = self._pad(plaintext)
         iv = Random.new().read(self.blockSize)
         cipher = AES.new(self.key,AES.MODE_CBC, iv)
         cipherText = cipher.encrypt(plainText.encode())

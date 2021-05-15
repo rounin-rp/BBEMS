@@ -1,11 +1,6 @@
-from re import M
-from encryption import AES
 from random import randint
 import socket 
 import select 
-import pickle 
-import json
-import hashlib
 from database import connectDatabase,executeSelectQuery,executeInsertQuery
 from message import receiveMessages,sendMessage
 
@@ -98,9 +93,6 @@ if __name__ == '__main__':
         for notified_socket in readers:
             if notified_socket == server_socket:
                 client_socket,client_addr = server_socket.accept()
-                # clientinfo = receiveMessages(client_socket)
-                # if clientinfo is False:
-                #     continue
                 print(f"connection established with {client_socket}")
                 socket_list.append(client_socket)
             else:
@@ -115,10 +107,9 @@ if __name__ == '__main__':
                         generatedTID = generateTransactionID(authUser)
                         message_to_send = ''
                         if(storeKeyToDatabase(generatedTID,generatedKey)):
-                            message_to_send = ['2001',generatedTID,generatedKey]
+                            message_to_send = ['2001',True,(generatedTID,generatedKey)]
                         else:
-                            message_to_send = False
-                        # notified_socket.send(pickle.dumps(message_to_send))
+                            message_to_send = ['2001',False,()]
                         sendMessage(notified_socket,message_to_send)
                     elif message_received[0] == '1002':
                         print("message id 1002 received")
@@ -131,8 +122,35 @@ if __name__ == '__main__':
                             message_to_send = ['2002',data]
                         else:
                             message_to_send = False
-                        # notified_socket.send(pickle.dumps(message_to_send))
                         sendMessage(notified_socket,message_to_send)
+                    
+                    elif message_received[0] == 'T1001':
+                        print("han bhai aa gya idhar T1001")
+                        key = generateKey()
+                        TID = generateTransactionID()
+                        val = storeKeyToDatabase(TID,key)
+                        message_to_send = None
+                        if val:
+                            message_to_send = ['T1001',True,(TID,key)]
+                        else:
+                            message_to_send = ['T1001',False,()]
+                        print(message_to_send)
+                        sendMessage(notified_socket,message_to_send)
+                    
+                    elif message_received[0] == 'D1D0':
+                        TID = message_received[1]
+                        print(f"Bhai key request karra {TID} se ")
+                        data = getKeyFromDatabase(TID)
+                        print(data)
+                        val = True
+                        key = 0
+                        if data[0]:
+                            key = data[1]['Key']
+                        else:
+                            val = False
+                        message_to_send = ['D1D0',val,key]
+                        sendMessage(notified_socket,message_to_send)
+
 
         for notified_socket in errors:
             print(f"something is wrong with {notified_socket}")

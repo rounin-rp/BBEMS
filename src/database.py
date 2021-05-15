@@ -6,7 +6,8 @@ def connectDatabase(hostname,username,psswd,databasename):
         host=hostname,
         user=username,
         password=psswd,
-        database=databasename
+        database=databasename,
+        auth_plugin='mysql_native_password'
         )
     return mydb
 
